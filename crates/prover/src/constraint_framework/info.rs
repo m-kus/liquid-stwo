@@ -355,6 +355,12 @@ impl From<BaseField> for FieldCounter {
     }
 }
 
+impl From<BaseField> for ExtensionFieldCounter {
+    fn from(_value: BaseField) -> Self {
+        Self::one()
+    }
+}
+
 impl From<SecureField> for ExtensionFieldCounter {
     fn from(_value: SecureField) -> Self {
         Self::one()

@@ -66,7 +66,6 @@ pub trait EvalAtRow {
         + Clone
         + Debug
         + Zero
-        + From<Self::F>
         + Neg<Output = Self::EF>
         + AddAssign
         + Add<BaseField, Output = Self::EF>
@@ -78,6 +77,7 @@ pub trait EvalAtRow {
         + Mul<Self::F, Output = Self::EF>
         + Sub<Self::EF, Output = Self::EF>
         + Mul<Self::EF, Output = Self::EF>
+        + From<BaseField>
         + From<SecureField>
         + From<Self::F>;
 

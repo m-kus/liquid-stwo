@@ -278,6 +278,12 @@ impl From<BaseField> for PackedM31 {
     }
 }
 
+impl From<BaseField> for PackedQM31 {
+    fn from(v: BaseField) -> Self {
+        Self::broadcast(QM31::from(v))
+    }
+}
+
 impl Distribution<PackedM31> for Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> PackedM31 {
         PackedM31::from_array(rng.gen())

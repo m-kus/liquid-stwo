@@ -108,6 +108,12 @@ impl From<VeryPackedM31> for VeryPackedQM31 {
     }
 }
 
+impl From<M31> for VeryPackedQM31 {
+    fn from(value: M31) -> Self {
+        VeryPackedQM31::broadcast(QM31::from(value))
+    }
+}
+
 impl From<QM31> for VeryPackedQM31 {
     fn from(value: QM31) -> Self {
         VeryPackedQM31::broadcast(value)
