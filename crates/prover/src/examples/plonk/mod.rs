@@ -250,9 +250,7 @@ pub fn prove_fibonacci_plonk(
     assert_constraints(
         &trace_polys,
         CanonicCoset::new(log_n_rows),
-        |mut eval| {
-            component.evaluate(eval);
-        },
+        |mut eval| component.evaluate(eval),
         claimed_sum,
     );
 

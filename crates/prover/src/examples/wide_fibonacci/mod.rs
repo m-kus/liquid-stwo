@@ -131,8 +131,10 @@ mod tests {
         generate_trace::<FIB_SEQUENCE_LENGTH>(log_n_instances, &inputs)
     }
 
-    fn fibonacci_constraint_evaluator<const N: u32>(eval: AssertEvaluator<'_>) {
-        WideFibonacciEval::<FIB_SEQUENCE_LENGTH> { log_n_rows: N }.evaluate(eval);
+    fn fibonacci_constraint_evaluator<const N: u32>(
+        eval: AssertEvaluator<'_>,
+    ) -> AssertEvaluator<'_> {
+        WideFibonacciEval::<FIB_SEQUENCE_LENGTH> { log_n_rows: N }.evaluate(eval)
     }
 
     #[test]

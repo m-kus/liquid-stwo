@@ -189,9 +189,7 @@ mod tests {
         assert_constraints(
             &trace_polys,
             CanonicCoset::new(XorTable::new(ELEM_BITS, EXPAND_BITS, 0).column_bits()),
-            |eval| {
-                component.evaluate(eval);
-            },
+            |eval| component.evaluate(eval),
             claimed_sum,
         )
     }

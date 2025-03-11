@@ -224,9 +224,7 @@ mod tests {
         assert_constraints(
             &trace_polys,
             CanonicCoset::new(log_n_rows),
-            |eval| {
-                component.evaluate(eval);
-            },
+            |eval| component.evaluate(eval),
             claimed_sum,
         );
     }

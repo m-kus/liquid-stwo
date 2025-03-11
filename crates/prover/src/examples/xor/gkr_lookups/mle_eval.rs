@@ -976,7 +976,8 @@ mod tests {
                     carry_quotients_col_eval,
                     is_first_eval,
                     is_second_eval,
-                )
+                );
+                eval
             },
             SecureField::zero(),
         )
@@ -1014,6 +1015,7 @@ mod tests {
                     is_first,
                     is_second,
                 );
+                eval
             },
             SecureField::zero(),
         );
@@ -1051,6 +1053,7 @@ mod tests {
                     is_first,
                     is_second,
                 );
+                eval
             },
             SecureField::zero(),
         );
@@ -1088,6 +1091,7 @@ mod tests {
                     is_first,
                     is_second,
                 );
+                eval
             },
             SecureField::zero(),
         );
@@ -1109,7 +1113,8 @@ mod tests {
             trace_domain,
             |mut eval| {
                 let [row_diff] = eval.next_extension_interaction_mask(0, [0]);
-                eval_prefix_sum_constraints(0, &mut eval, row_diff, cumulative_sum_shift)
+                eval_prefix_sum_constraints(0, &mut eval, row_diff, cumulative_sum_shift);
+                eval
             },
             SecureField::zero(),
         );

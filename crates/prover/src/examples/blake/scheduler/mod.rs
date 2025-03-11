@@ -105,9 +105,7 @@ mod tests {
         crate::constraint_framework::assert_constraints(
             &trace_polys,
             CanonicCoset::new(LOG_SIZE),
-            |eval| {
-                component.evaluate(eval);
-            },
+            |eval| component.evaluate(eval),
             claimed_sum,
         )
     }

@@ -11,13 +11,21 @@ use crate::core::pcs::TreeVec;
 use crate::core::poly::circle::{CanonicCoset, CirclePoly};
 use crate::core::utils::circle_domain_order_to_coset_order;
 
+#[derive(Debug)]
+pub struct UnsatisfiedConstraint {
+    pub value: SecureField,
+    pub row: usize,
+}
+
 /// Evaluates expressions at a trace domain row, and asserts constraints. Mainly used for testing.
 pub struct AssertEvaluator<'a> {
     pub trace: &'a TreeVec<Vec<Vec<BaseField>>>,
     pub col_index: TreeVec<usize>,
     pub row: usize,
     pub logup: LogupAtRow<Self>,
+    pub errors: Vec<UnsatisfiedConstraint>,
 }
+
 impl<'a> AssertEvaluator<'a> {
     pub fn new(
         trace: &'a TreeVec<Vec<Vec<BaseField>>>,
@@ -30,6 +38,7 @@ impl<'a> AssertEvaluator<'a> {
             col_index: TreeVec::new(vec![0; trace.len()]),
             row,
             logup: LogupAtRow::new(INTERACTION_TRACE_IDX, claimed_sum, log_size),
+            errors: vec![],
         }
     }
 }
@@ -59,12 +68,13 @@ impl EvalAtRow for AssertEvaluator<'_> {
         // Cast to SecureField.
         // The constraint should be zero at the given row, since we are evaluating on the trace
         // domain.
-        assert_eq!(
-            Self::EF::from(constraint),
-            SecureField::zero(),
-            "row: {}",
-            self.row
-        );
+        let evaluated_constraint = SecureField::from(constraint);
+        if !evaluated_constraint.is_zero() {
+            self.errors.push(UnsatisfiedConstraint {
+                value: evaluated_constraint,
+                row: self.row,
+            });
+        }
     }
 
     fn combine_ef(values: [Self::F; SECURE_EXTENSION_DEGREE]) -> Self::EF {
@@ -77,7 +87,7 @@ impl EvalAtRow for AssertEvaluator<'_> {
 pub fn assert_constraints<B: Backend>(
     trace_polys: &TreeVec<Vec<CirclePoly<B>>>,
     trace_domain: CanonicCoset,
-    assert_func: impl Fn(AssertEvaluator<'_>),
+    assert_func: impl Fn(AssertEvaluator<'_>) -> AssertEvaluator<'_>,
     claimed_sum: SecureField,
 ) {
     let traces = trace_polys.as_ref().map(|tree| {
@@ -96,6 +106,9 @@ pub fn assert_constraints<B: Backend>(
     for row in 0..trace_domain.size() {
         let eval = AssertEvaluator::new(&traces, row, trace_domain.log_size(), claimed_sum);
 
-        assert_func(eval);
+        let eval = assert_func(eval);
+        if !eval.errors.is_empty() {
+            panic!("Unsatisfied constraints: {:?}", eval.errors);
+        }
     }
 }

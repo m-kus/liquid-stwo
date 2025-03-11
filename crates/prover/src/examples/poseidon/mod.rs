@@ -478,6 +478,7 @@ mod tests {
             CanonicCoset::new(LOG_N_ROWS),
             |mut eval| {
                 eval_poseidon_constraints(&mut eval, &lookup_elements);
+                eval
             },
             claimed_sum,
         );
