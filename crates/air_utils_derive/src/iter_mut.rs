@@ -28,6 +28,15 @@ pub fn expand_iter_mut_structs(
 
 fn expand_impl_struct_name(struct_name: &Ident, iterable_fields: &[IterableField]) -> TokenStream {
     let iter_mut_name = format_ident!("{}IterMut", struct_name);
+    if iterable_fields.is_empty() {
+        return quote! {
+            impl #struct_name {
+                pub fn iter_mut(&mut self) -> #iter_mut_name<'_> {
+                    #iter_mut_name::new()
+                }
+            }
+        };
+    }
     let as_mut_slice = iterable_fields
         .iter()
         .map(|f| f.as_mut_slice())
@@ -46,6 +55,11 @@ fn expand_impl_struct_name(struct_name: &Ident, iterable_fields: &[IterableField
 fn expand_mut_chunk_struct(struct_name: &Ident, iterable_fields: &[IterableField]) -> TokenStream {
     let lifetime = Lifetime::new("'a", Span::call_site());
     let mut_chunk_name = format_ident!("{}MutChunk", struct_name);
+    if iterable_fields.is_empty() {
+        return quote! {
+            pub struct #mut_chunk_name {}
+        };
+    }
     let (visibility, field_names, mut_chunk_types): (Vec<_>, Vec<_>, Vec<_>) = iterable_fields
         .iter()
         .map(|f| (f.visibility(), f.name(), f.mut_chunk_type(&lifetime)))
@@ -61,6 +75,20 @@ fn expand_mut_chunk_struct(struct_name: &Ident, iterable_fields: &[IterableField
 fn expand_iter_mut_struct(struct_name: &Ident, iterable_fields: &[IterableField]) -> TokenStream {
     let lifetime = Lifetime::new("'a", Span::call_site());
     let iter_mut_name = format_ident!("{}IterMut", struct_name);
+    if iterable_fields.is_empty() {
+        return quote! {
+            pub struct #iter_mut_name<#lifetime> {
+                phantom: std::marker::PhantomData<&#lifetime ()>,
+            }
+            impl<#lifetime> #iter_mut_name<#lifetime> {
+                pub fn new() -> Self {
+                    Self {
+                        phantom: std::marker::PhantomData,
+                    }
+                }
+            }
+        };
+    }
     let (field_names, mut_slice_types, mut_ptr_types, as_mut_ptr): (
         Vec<_>,
         Vec<_>,
@@ -100,6 +128,20 @@ fn expand_iterator_impl(struct_name: &Ident, iterable_fields: &[IterableField]) 
     let lifetime = Lifetime::new("'a", Span::call_site());
     let iter_mut_name = format_ident!("{}IterMut", struct_name);
     let mut_chunk_name = format_ident!("{}MutChunk", struct_name);
+    if iterable_fields.is_empty() {
+        return quote! {
+            impl<#lifetime> Iterator for #iter_mut_name<#lifetime> {
+                type Item = #mut_chunk_name;
+                fn next(&mut self) -> Option<Self::Item> {
+                    return None;
+                }
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    let len = 0;
+                    (len, Some(len))
+                }
+            }
+        };
+    }
     let (field_names, split_first): (Vec<_>, Vec<_>) = iterable_fields
         .iter()
         .map(|f| (f.name(), f.split_first()))
@@ -142,6 +184,15 @@ fn expand_double_ended_iterator(
 ) -> TokenStream {
     let iter_mut_name = format_ident!("{}IterMut", struct_name);
     let mut_chunk_name = format_ident!("{}MutChunk", struct_name);
+    if iterable_fields.is_empty() {
+        return quote! {
+            impl DoubleEndedIterator for #iter_mut_name<'_> {
+                fn next_back(&mut self) -> Option<Self::Item> {
+                    return None;
+                }
+            }
+        };
+    }
     let (field_names, split_last): (Vec<_>, Vec<_>) = iterable_fields
         .iter()
         .map(|f| (f.name(), f.split_last(&format_ident!("len"))))

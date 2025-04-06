@@ -28,6 +28,15 @@ pub fn expand_par_iter_mut_structs(
 
 fn generate_struct_impl(struct_name: &Ident, iterable_fields: &[IterableField]) -> TokenStream {
     let par_iter_mut_name = format_ident!("{}ParIterMut", struct_name);
+    if iterable_fields.is_empty() {
+        return quote! {
+            impl #struct_name {
+                pub fn par_iter_mut(&mut self) -> #par_iter_mut_name {
+                    #par_iter_mut_name::new()
+                }
+            }
+        };
+    }
     let as_mut_slice = iterable_fields.iter().map(|f| f.as_mut_slice());
     quote! {
         impl #struct_name {
@@ -49,6 +58,36 @@ fn generate_row_producer(
     let row_producer_name = format_ident!("{}RowProducer", struct_name);
     let mut_chunk_name = format_ident!("{}MutChunk", struct_name);
     let iter_mut_name = format_ident!("{}IterMut", struct_name);
+    if iterable_fields.is_empty() {
+        return quote! {
+            pub struct #row_producer_name<#lifetime> {
+                phantom: std::marker::PhantomData<&#lifetime ()>,
+            }
+            impl<#lifetime> #row_producer_name<#lifetime> {
+                pub fn new() -> Self {
+                    Self {
+                        phantom: std::marker::PhantomData,
+                    }
+                }
+            }
+            impl<#lifetime> rayon::iter::plumbing::Producer for #row_producer_name<#lifetime> {
+                type Item = #mut_chunk_name;
+                type IntoIter = #iter_mut_name<#lifetime>;
+
+                #[allow(invalid_value)]
+                fn split_at(self, index: usize) -> (Self, Self) {
+                    (
+                        #row_producer_name::new(),
+                        #row_producer_name::new()
+                    )
+                }
+
+                fn into_iter(self) -> Self::IntoIter {
+                    #iter_mut_name::new()
+                }
+            }
+        };
+    }
     let (field_names, mut_slice_types, split_at): (Vec<_>, Vec<_>, Vec<_>) = iterable_fields
         .iter()
         .map(|f| {
@@ -95,6 +134,17 @@ fn generate_par_iter_struct(
     lifetime: &Lifetime,
 ) -> TokenStream {
     let par_iter_mut_name = format_ident!("{struct_name}ParIterMut");
+    if iterable_fields.is_empty() {
+        return quote! {
+            pub struct #par_iter_mut_name{}
+
+            impl #par_iter_mut_name {
+                pub fn new() -> Self {
+                    Self {}
+                }
+            }
+        };
+    }
     let (field_names, mut_slice_types): (Vec<_>, Vec<_>) = iterable_fields
         .iter()
         .map(|f| (f.name(), f.mut_slice_type(lifetime)))
@@ -124,6 +174,40 @@ fn generate_parallel_iterator_impls(
     let par_iter_mut_name = format_ident!("{}ParIterMut", struct_name);
     let mut_chunk_name = format_ident!("{}MutChunk", struct_name);
     let row_producer_name = format_ident!("{}RowProducer", struct_name);
+    if iterable_fields.is_empty() {
+        return quote! {
+            impl rayon::prelude::ParallelIterator for #par_iter_mut_name {
+                type Item = #mut_chunk_name;
+
+                fn drive_unindexed<D>(self, consumer: D) -> D::Result
+                where
+                    D: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+                {
+                    rayon::iter::plumbing::bridge(self, consumer)
+                }
+
+                fn opt_len(&self) -> Option<usize> {
+                    Some(self.len())
+                }
+            }
+
+            impl rayon::iter::IndexedParallelIterator for #par_iter_mut_name {
+                fn len(&self) -> usize {
+                    0
+                }
+
+                fn drive<D: rayon::iter::plumbing::Consumer<Self::Item>>(self, consumer: D) -> D::Result {
+                    rayon::iter::plumbing::bridge(self, consumer)
+                }
+
+                fn with_producer<CB: rayon::iter::plumbing::ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
+                    callback.callback(
+                        #row_producer_name::new()
+                    )
+                }
+            }
+        };
+    }
     let field_names = iterable_fields.iter().map(|f| f.name());
     let get_length = iterable_fields.first().unwrap().get_len();
     quote! {
