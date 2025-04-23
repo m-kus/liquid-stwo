@@ -313,6 +313,7 @@ macro_rules! relation {
             $crate::constraint_framework::Relation<F, EF> for $name
         {
             fn combine(&self, values: &[F]) -> EF {
+                assert!(values.len() <= $size);
                 values
                     .iter()
                     .zip(self.0.alpha_powers)
