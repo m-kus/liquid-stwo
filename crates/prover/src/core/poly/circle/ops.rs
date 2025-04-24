@@ -36,6 +36,12 @@ pub trait PolyOps: ColumnOps<BaseField> + Sized {
     /// Used by the [`CirclePoly::eval_at_point()`] function.
     fn eval_at_point(poly: &CirclePoly<Self>, point: CirclePoint<SecureField>) -> SecureField;
 
+    /// Evaluates the polynomial at a single point using the barycentric formula.
+    fn barycentric_eval_at_point(
+        evals: &CircleEvaluation<Self, BaseField, BitReversedOrder>,
+        point: CirclePoint<SecureField>,
+    ) -> SecureField;
+
     /// Extends the polynomial to a larger degree bound.
     /// Used by the [`CirclePoly::extend()`] function.
     fn extend(poly: &CirclePoly<Self>, log_size: u32) -> CirclePoly<Self>;

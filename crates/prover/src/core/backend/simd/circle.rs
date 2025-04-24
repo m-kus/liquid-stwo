@@ -3,6 +3,7 @@ use std::mem::transmute;
 use std::simd::Simd;
 
 use bytemuck::Zeroable;
+use num_traits::Zero;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -15,6 +16,7 @@ use crate::core::backend::simd::column::BaseColumn;
 use crate::core::backend::simd::m31::PackedM31;
 use crate::core::backend::{Col, Column, CpuBackend};
 use crate::core::circle::{CirclePoint, Coset, M31_CIRCLE_LOG_ORDER};
+use crate::core::constraints::{coset_vanishing, point_vanishing};
 use crate::core::fields::m31::BaseField;
 use crate::core::fields::qm31::SecureField;
 use crate::core::fields::{Field, FieldExpOps};
@@ -219,6 +221,33 @@ impl PolyOps for SimdBackend {
         };
 
         (sum * twiddle_lows).pointwise_sum()
+    }
+
+    fn barycentric_eval_at_point(
+        evals: &CircleEvaluation<Self, BaseField, BitReversedOrder>,
+        point: CirclePoint<SecureField>,
+    ) -> SecureField {
+        let eval_vals: Vec<BaseField> = evals.values.clone().into_cpu_vec();
+        for i in 0..evals.domain.size() {
+            if point == evals.domain.at(i).into_ef() {
+                return eval_vals[bit_reverse_index(i, evals.domain.log_size())].into();
+            }
+        }
+
+        let frac: SecureField = (0..evals.domain.size()).fold(SecureField::zero(), |acc, i| {
+            let domain_point_eval = eval_vals[bit_reverse_index(i, evals.domain.log_size())];
+            let domain_point_vanishing_evaluated_at_point = point_vanishing(
+                evals.domain.at(i).into_ef::<SecureField>(),
+                point.into_ef::<SecureField>(),
+            );
+            acc + (domain_point_eval
+                * (evals.weights[i] / domain_point_vanishing_evaluated_at_point))
+        });
+        let coset_vanishing_evaluated_at_point: SecureField = coset_vanishing(
+            CanonicCoset::new(evals.domain.log_size()).coset,
+            point.into_ef::<SecureField>(),
+        );
+        coset_vanishing_evaluated_at_point * frac
     }
 
     fn extend(poly: &CirclePoly<Self>, log_size: u32) -> CirclePoly<Self> {

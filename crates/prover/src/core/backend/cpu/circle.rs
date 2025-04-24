@@ -3,14 +3,18 @@ use num_traits::Zero;
 use super::CpuBackend;
 use crate::core::backend::cpu::bit_reverse;
 use crate::core::circle::{CirclePoint, Coset};
+use crate::core::constraints::{coset_vanishing, point_vanishing};
 use crate::core::fft::{butterfly, ibutterfly};
 use crate::core::fields::m31::BaseField;
 use crate::core::fields::qm31::SecureField;
 use crate::core::fields::{batch_inverse_in_place, ExtensionOf};
-use crate::core::poly::circle::{CircleDomain, CircleEvaluation, CirclePoly, PolyOps};
+use crate::core::poly::circle::{
+    CanonicCoset, CircleDomain, CircleEvaluation, CirclePoly, PolyOps,
+};
 use crate::core::poly::twiddles::TwiddleTree;
 use crate::core::poly::utils::{domain_line_twiddles_from_tree, fold};
 use crate::core::poly::BitReversedOrder;
+use crate::core::utils::bit_reverse_index;
 
 impl PolyOps for CpuBackend {
     type Twiddles = Vec<BaseField>;
@@ -84,6 +88,32 @@ impl PolyOps for CpuBackend {
         mappings.reverse();
 
         fold(&poly.coeffs, &mappings)
+    }
+
+    fn barycentric_eval_at_point(
+        evals: &CircleEvaluation<Self, BaseField, BitReversedOrder>,
+        point: CirclePoint<SecureField>,
+    ) -> SecureField {
+        for i in 0..evals.domain.size() {
+            if point == evals.domain.at(i).into_ef() {
+                return evals.values[bit_reverse_index(i, evals.domain.log_size())].into();
+            }
+        }
+
+        let frac: SecureField = (0..evals.domain.size()).fold(SecureField::zero(), |acc, i| {
+            let domain_point_eval = evals.values[bit_reverse_index(i, evals.domain.log_size())];
+            let domain_point_vanishing_evaluated_at_point = point_vanishing(
+                evals.domain.at(i).into_ef::<SecureField>(),
+                point.into_ef::<SecureField>(),
+            );
+            acc + (domain_point_eval
+                * (evals.weights[i] / domain_point_vanishing_evaluated_at_point))
+        });
+        let coset_vanishing_evaluated_at_point: SecureField = coset_vanishing(
+            CanonicCoset::new(evals.domain.log_size()).coset,
+            point.into_ef::<SecureField>(),
+        );
+        coset_vanishing_evaluated_at_point * frac
     }
 
     fn extend(poly: &CirclePoly<Self>, log_size: u32) -> CirclePoly<Self> {

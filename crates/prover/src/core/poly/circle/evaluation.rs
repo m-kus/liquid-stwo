@@ -2,13 +2,16 @@ use std::marker::PhantomData;
 use std::ops::{Deref, Index};
 
 use educe::Educe;
+use num_traits::{One, Zero};
 
 use super::{CircleDomain, CirclePoly, PolyOps};
 use crate::core::backend::cpu::CpuCircleEvaluation;
 use crate::core::backend::simd::SimdBackend;
 use crate::core::backend::{Col, Column, ColumnOps, CpuBackend};
-use crate::core::circle::{CirclePointIndex, Coset};
+use crate::core::circle::{CirclePoint, CirclePointIndex, Coset};
+use crate::core::constraints::coset_vanishing_derivative;
 use crate::core::fields::m31::BaseField;
+use crate::core::fields::qm31::SecureField;
 use crate::core::fields::ExtensionOf;
 use crate::core::poly::twiddles::TwiddleTree;
 use crate::core::poly::{BitReversedOrder, NaturalOrder};
@@ -21,6 +24,7 @@ use crate::core::utils::bit_reverse_index;
 pub struct CircleEvaluation<B: ColumnOps<F>, F: ExtensionOf<BaseField>, EvalOrder = NaturalOrder> {
     pub domain: CircleDomain,
     pub values: Col<B, F>,
+    pub weights: Vec<SecureField>,
     _eval_order: PhantomData<EvalOrder>,
 }
 
@@ -30,9 +34,23 @@ impl<B: ColumnOps<F>, F: ExtensionOf<BaseField>, EvalOrder> CircleEvaluation<B, 
         Self {
             domain,
             values,
+            weights: weights(domain),
             _eval_order: PhantomData,
         }
     }
+}
+pub fn weights(domain: CircleDomain) -> Vec<SecureField> {
+    let mut weights = vec![SecureField::zero(); domain.size()];
+    for i in 0..domain.size() {
+        let p_i = domain.at(i).into_ef::<SecureField>();
+        weights[i] = SecureField::one()
+            / (-(p_i.y + p_i.y)
+                * coset_vanishing_derivative(
+                    Coset::new(CirclePointIndex::generator(), domain.log_size()),
+                    p_i,
+                ))
+    }
+    weights
 }
 
 // Note: The concrete implementation of the poly operations is in the specific backend used.
@@ -83,6 +101,10 @@ impl<B: PolyOps> CircleEvaluation<B, BaseField, BitReversedOrder> {
     /// precomputed twiddles.
     pub fn interpolate_with_twiddles(self, twiddles: &TwiddleTree<B>) -> CirclePoly<B> {
         B::interpolate(self, twiddles)
+    }
+
+    pub fn barycentric_eval_at_point(&self, point: CirclePoint<SecureField>) -> SecureField {
+        B::barycentric_eval_at_point(self, point)
     }
 }
 
@@ -157,8 +179,8 @@ impl<F: ExtensionOf<BaseField>> Index<usize> for CosetSubEvaluation<'_, F> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::backend::cpu::CpuCircleEvaluation;
-    use crate::core::circle::Coset;
+    use crate::core::backend::cpu::{CpuCircleEvaluation, CpuCirclePoly};
+    use crate::core::circle::{CirclePoint, Coset};
     use crate::core::fields::m31::BaseField;
     use crate::core::poly::circle::CanonicCoset;
     use crate::core::poly::NaturalOrder;
@@ -203,5 +225,39 @@ mod tests {
         for i in 0..coset.size() {
             assert_eq!(sub_eval[i], circle_evaluation.get_at(coset.index_at(i)));
         }
+    }
+
+    #[test]
+    fn test_barycentric_evaluation() {
+        let poly = CpuCirclePoly::new(
+            [691, 805673, 5, 435684, 4832, 23876431, 197, 897346068]
+                .map(BaseField::from)
+                .to_vec(),
+        );
+        let s = CanonicCoset::new(3);
+        let domain = s.circle_domain();
+        let eval = poly.evaluate(domain);
+        let sampled_points = [
+            CirclePoint::get_point(348),
+            CirclePoint::get_point(9736524),
+            CirclePoint::get_point(13),
+            CirclePoint::get_point(346752),
+            domain.at(0).into_ef(),
+            domain.at(3).into_ef(),
+        ];
+        let sampled_values = sampled_points
+            .iter()
+            .map(|point| poly.eval_at_point(*point))
+            .collect::<Vec<_>>();
+
+        let sampled_barycentric_values = sampled_points
+            .iter()
+            .map(|point| eval.barycentric_eval_at_point(*point))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            sampled_barycentric_values, sampled_values,
+            "Barycentric evaluation should be equal to the polynomial evaluation"
+        );
     }
 }
