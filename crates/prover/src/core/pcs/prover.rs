@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ use super::{PcsConfig, TreeSubspan};
 use crate::core::air::Trace;
 use crate::core::backend::BackendForChannel;
 use crate::core::channel::{Channel, MerkleChannel};
-use crate::core::poly::circle::{CircleEvaluation, CirclePoly};
+use crate::core::poly::circle::{weights, CircleEvaluation, CirclePoly};
 use crate::core::poly::twiddles::TwiddleTree;
 use crate::core::vcs::ops::MerkleHasher;
 use crate::core::vcs::prover::{MerkleDecommitment, MerkleProver};
@@ -80,6 +80,17 @@ impl<'a, B: BackendForChannel<MC>, MC: MerkleChannel> CommitmentSchemeProver<'a,
         Trace { polys, evals }
     }
 
+    pub fn build_weights_hash_map(&self) -> HashMap<u32, Vec<SecureField>> {
+        let mut weights_hash_map = HashMap::new();
+        for eval in self.evaluations().flatten().into_iter() {
+            let log_size = eval.domain.log_size();
+            if !weights_hash_map.contains_key(&log_size) {
+                weights_hash_map.insert(log_size, weights(log_size));
+            }
+        }
+        weights_hash_map
+    }
+
     pub fn prove_values(
         self,
         sampled_points: TreeVec<ColumnVec<Vec<CirclePoint<SecureField>>>>,
@@ -87,15 +98,19 @@ impl<'a, B: BackendForChannel<MC>, MC: MerkleChannel> CommitmentSchemeProver<'a,
     ) -> CommitmentSchemeProof<MC::H> {
         // Evaluate polynomials on open points.
         let span = span!(Level::INFO, "Evaluate columns out of domain").entered();
+        let weights_hash_map = self.build_weights_hash_map();
         let samples = self
-            .polynomials()
+            .evaluations()
             .zip_cols(&sampled_points)
-            .map_cols(|(poly, points)| {
+            .map_cols(|(eval, points)| {
                 points
                     .iter()
                     .map(|&point| PointSample {
                         point,
-                        value: poly.eval_at_point(point),
+                        value: eval.barycentric_eval_at_point(
+                            point,
+                            &weights_hash_map[&eval.domain.log_size()],
+                        ),
                     })
                     .collect_vec()
             });
