@@ -13,6 +13,7 @@ use crate::core::constraints::coset_vanishing_derivative;
 use crate::core::fields::m31::BaseField;
 use crate::core::fields::qm31::SecureField;
 use crate::core::fields::ExtensionOf;
+use crate::core::poly::circle::CanonicCoset;
 use crate::core::poly::twiddles::TwiddleTree;
 use crate::core::poly::{BitReversedOrder, NaturalOrder};
 use crate::core::utils::bit_reverse_index;
@@ -24,7 +25,6 @@ use crate::core::utils::bit_reverse_index;
 pub struct CircleEvaluation<B: ColumnOps<F>, F: ExtensionOf<BaseField>, EvalOrder = NaturalOrder> {
     pub domain: CircleDomain,
     pub values: Col<B, F>,
-    pub weights: Vec<SecureField>,
     _eval_order: PhantomData<EvalOrder>,
 }
 
@@ -34,23 +34,9 @@ impl<B: ColumnOps<F>, F: ExtensionOf<BaseField>, EvalOrder> CircleEvaluation<B, 
         Self {
             domain,
             values,
-            weights: weights(domain),
             _eval_order: PhantomData,
         }
     }
-}
-pub fn weights(domain: CircleDomain) -> Vec<SecureField> {
-    let mut weights = vec![SecureField::zero(); domain.size()];
-    for i in 0..domain.size() {
-        let p_i = domain.at(i).into_ef::<SecureField>();
-        weights[i] = SecureField::one()
-            / (-(p_i.y + p_i.y)
-                * coset_vanishing_derivative(
-                    Coset::new(CirclePointIndex::generator(), domain.log_size()),
-                    p_i,
-                ))
-    }
-    weights
 }
 
 // Note: The concrete implementation of the poly operations is in the specific backend used.
@@ -103,8 +89,17 @@ impl<B: PolyOps> CircleEvaluation<B, BaseField, BitReversedOrder> {
         B::interpolate(self, twiddles)
     }
 
-    pub fn barycentric_eval_at_point(&self, point: CirclePoint<SecureField>) -> SecureField {
-        B::barycentric_eval_at_point(self, point)
+    pub fn barycentric_eval_at_point(
+        &self,
+        point: CirclePoint<SecureField>,
+        weights: &Vec<SecureField>,
+    ) -> SecureField {
+        assert_eq!(
+            self.domain.size(),
+            weights.len(),
+            "Weights must be the same size as the domain"
+        );
+        B::barycentric_eval_at_point(self, point, weights)
     }
 }
 
@@ -177,8 +172,24 @@ impl<F: ExtensionOf<BaseField>> Index<usize> for CosetSubEvaluation<'_, F> {
     }
 }
 
+pub fn weights(log_size: u32) -> Vec<SecureField> {
+    let mut weights = vec![SecureField::zero(); 1 << log_size];
+    let domain = CanonicCoset::new(log_size).circle_domain();
+    for i in 0..domain.size() {
+        let p_i = domain.at(i).into_ef::<SecureField>();
+        weights[i] = SecureField::one()
+            / (-(p_i.y + p_i.y)
+                * coset_vanishing_derivative(
+                    Coset::new(CirclePointIndex::generator(), domain.log_size()),
+                    p_i,
+                ))
+    }
+    weights
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::core::backend::cpu::{CpuCircleEvaluation, CpuCirclePoly};
     use crate::core::circle::{CirclePoint, Coset};
     use crate::core::fields::m31::BaseField;
@@ -252,7 +263,7 @@ mod tests {
 
         let sampled_barycentric_values = sampled_points
             .iter()
-            .map(|point| eval.barycentric_eval_at_point(*point))
+            .map(|point| eval.barycentric_eval_at_point(*point, &weights(eval.domain.log_size())))
             .collect::<Vec<_>>();
 
         assert_eq!(

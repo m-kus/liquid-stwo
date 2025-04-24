@@ -40,6 +40,7 @@ pub trait PolyOps: ColumnOps<BaseField> + Sized {
     fn barycentric_eval_at_point(
         evals: &CircleEvaluation<Self, BaseField, BitReversedOrder>,
         point: CirclePoint<SecureField>,
+        weights: &Vec<SecureField>,
     ) -> SecureField;
 
     /// Extends the polynomial to a larger degree bound.

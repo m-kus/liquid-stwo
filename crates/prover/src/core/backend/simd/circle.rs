@@ -226,6 +226,7 @@ impl PolyOps for SimdBackend {
     fn barycentric_eval_at_point(
         evals: &CircleEvaluation<Self, BaseField, BitReversedOrder>,
         point: CirclePoint<SecureField>,
+        weights: &Vec<SecureField>,
     ) -> SecureField {
         let eval_vals: Vec<BaseField> = evals.values.clone().into_cpu_vec();
         for i in 0..evals.domain.size() {
@@ -240,8 +241,7 @@ impl PolyOps for SimdBackend {
                 evals.domain.at(i).into_ef::<SecureField>(),
                 point.into_ef::<SecureField>(),
             );
-            acc + (domain_point_eval
-                * (evals.weights[i] / domain_point_vanishing_evaluated_at_point))
+            acc + (domain_point_eval * (weights[i] / domain_point_vanishing_evaluated_at_point))
         });
         let coset_vanishing_evaluated_at_point: SecureField = coset_vanishing(
             CanonicCoset::new(evals.domain.log_size()).coset,
