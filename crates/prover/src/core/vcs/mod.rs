@@ -9,6 +9,7 @@ pub mod ops;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod poseidon252_merkle;
 pub mod prover;
+pub mod sha256_hash;
 mod utils;
 pub mod verifier;
 

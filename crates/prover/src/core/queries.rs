@@ -25,7 +25,7 @@ impl Queries {
         loop {
             let random_bytes = channel.draw_random_bytes();
             for chunk in random_bytes.chunks_exact(UPPER_BOUND_QUERY_BYTES) {
-                let query_bits = u32::from_le_bytes(chunk.try_into().unwrap());
+                let query_bits = u32::from_be_bytes(chunk.try_into().unwrap());
                 let quotient_query = query_bits & max_query;
                 queries.insert(quotient_query as usize);
                 query_cnt += 1;

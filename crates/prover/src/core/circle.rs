@@ -467,11 +467,12 @@ mod tests {
     use num_traits::{One, Pow};
 
     use super::{CirclePointIndex, Coset};
-    use crate::core::channel::Blake2sChannel;
+    use crate::core::channel::Sha256Channel;
     use crate::core::circle::{CirclePoint, SECURE_FIELD_CIRCLE_GEN};
     use crate::core::fields::qm31::{SecureField, P4};
     use crate::core::fields::FieldExpOps;
     use crate::core::poly::circle::CanonicCoset;
+    use crate::qm31;
 
     #[test]
     fn test_iterator() {
@@ -512,9 +513,12 @@ mod tests {
 
     #[test]
     pub fn test_get_random_circle_point() {
-        let mut channel = Blake2sChannel::default();
+        let mut channel = Sha256Channel::default();
 
         let first_random_circle_point = CirclePoint::get_random_point(&mut channel);
+        let x = qm31!(877266510, 837585062, 67369234, 641637369);
+        let y = qm31!(1140140443, 711987229, 851311779, 496972972);
+        assert_eq!(first_random_circle_point, CirclePoint { x, y });
 
         // Assert that the next random circle point is different.
         assert_ne!(
