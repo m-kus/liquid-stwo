@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use super::blake2s::compress16;
 use super::SimdBackend;
 use crate::core::backend::simd::m31::N_LANES;
-use crate::core::channel::Blake2sChannel;
+use crate::core::channel::{Blake2sChannel, Sha256Channel};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::core::channel::{Channel, Poseidon252Channel};
 use crate::core::proof_of_work::GrindOps;
@@ -66,6 +66,20 @@ fn grind_blake(digest: &[u32], hi: u64, pow_bits: u32) -> Option<u64> {
 #[cfg(not(target_arch = "wasm32"))]
 impl GrindOps<Poseidon252Channel> for SimdBackend {
     fn grind(channel: &Poseidon252Channel, pow_bits: u32) -> u64 {
+        let mut nonce = 0;
+        loop {
+            let mut channel = channel.clone();
+            channel.mix_u64(nonce);
+            if channel.trailing_zeros() >= pow_bits {
+                return nonce;
+            }
+            nonce += 1;
+        }
+    }
+}
+
+impl GrindOps<Sha256Channel> for SimdBackend {
+    fn grind(channel: &Sha256Channel, pow_bits: u32) -> u64 {
         let mut nonce = 0;
         loop {
             let mut channel = channel.clone();
