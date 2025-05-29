@@ -20,6 +20,7 @@ use crate::core::poly::circle::{CircleEvaluation, CirclePoly};
 use crate::core::poly::twiddles::TwiddleTree;
 use crate::core::vcs::ops::MerkleHasher;
 use crate::core::vcs::prover::{MerkleDecommitment, MerkleProver};
+use crate::core::vcs::simple::SimpleMerkleProver;
 
 /// The prover side of a FRI polynomial commitment scheme. See [super].
 pub struct CommitmentSchemeProver<'a, B: BackendForChannel<MC>, MC: MerkleChannel> {
@@ -216,7 +217,8 @@ impl<B: BackendForChannel<MC>, MC: MerkleChannel> CommitmentTreeProver<B, MC> {
         span.exit();
 
         let _span = span!(Level::INFO, "Merkle").entered();
-        let tree = MerkleProver::commit(evaluations.iter().map(|eval| &eval.values).collect());
+        let tree =
+            MerkleProver::simple_commit(evaluations.iter().map(|eval| &eval.values).collect());
         MC::mix_root(channel, tree.root());
 
         CommitmentTreeProver {
@@ -239,6 +241,6 @@ impl<B: BackendForChannel<MC>, MC: MerkleChannel> CommitmentTreeProver<B, MC> {
             .iter()
             .map(|eval| &eval.values)
             .collect_vec();
-        self.commitment.decommit(queries, eval_vec)
+        self.commitment.simple_decommit(queries, eval_vec)
     }
 }

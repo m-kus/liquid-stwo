@@ -11,6 +11,7 @@ pub mod poseidon252_merkle;
 pub mod prover;
 pub mod sha256_hash;
 pub mod sha256_merkle;
+pub mod simple;
 mod utils;
 pub mod verifier;
 
