@@ -287,7 +287,7 @@ mod tests {
     #[test_log::test]
     fn test_wide_fib_prove_with_sha256() {
         let log_n_instances = 2;
-        
+
         let config = PcsConfig {
             pow_bits: 5,
             fri_config: FriConfig {
@@ -337,8 +337,7 @@ mod tests {
 
         // Verify.
         let verifier_channel = &mut Sha256Channel::default();
-        let commitment_scheme =
-            &mut CommitmentSchemeVerifier::<Sha256MerkleChannel>::new(config);
+        let commitment_scheme = &mut CommitmentSchemeVerifier::<Sha256MerkleChannel>::new(config);
 
         // Retrieve the expected column sizes in each commitment interaction, from the AIR.
         let sizes = component.trace_log_degree_bounds();

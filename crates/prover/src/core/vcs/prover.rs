@@ -169,8 +169,9 @@ pub struct MerkleDecommitment<H: MerkleHasher> {
     /// the verifier.
     pub column_witness: Vec<BaseField>,
 }
+
 impl<H: MerkleHasher> MerkleDecommitment<H> {
-    const fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self {
             hash_witness: Vec::new(),
             column_witness: Vec::new(),

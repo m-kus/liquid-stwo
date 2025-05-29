@@ -11,6 +11,7 @@ use super::{CommitmentSchemeProof, PcsConfig};
 use crate::core::channel::{Channel, MerkleChannel};
 use crate::core::prover::VerificationError;
 use crate::core::vcs::ops::MerkleHasher;
+use crate::core::vcs::simple::SimpleMerkleVerifier;
 use crate::core::vcs::verifier::MerkleVerifier;
 use crate::core::ColumnVec;
 
@@ -92,7 +93,7 @@ impl<MC: MerkleChannel> CommitmentSchemeVerifier<MC> {
             .zip_eq(proof.decommitments)
             .zip_eq(proof.queried_values.clone())
             .map(|((tree, decommitment), queried_values)| {
-                tree.verify(&query_positions_per_log_size, queried_values, decommitment)
+                tree.simple_verify(&query_positions_per_log_size, queried_values, decommitment)
             })
             .0
             .into_iter()
