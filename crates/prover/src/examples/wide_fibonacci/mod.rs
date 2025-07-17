@@ -315,9 +315,11 @@ mod tests {
 
         // Trace.
         let trace = generate_test_trace(log_n_instances);
+        println!("trace column length {}", trace.iter().map(|x| x.length).max().unwrap());
         let mut tree_builder = commitment_scheme.tree_builder();
         tree_builder.extend_evals(trace);
         tree_builder.commit(prover_channel);
+
 
         // Prove constraints.
         let component = WideFibonacciComponent::new(

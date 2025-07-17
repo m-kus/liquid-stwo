@@ -110,7 +110,8 @@ mod tests {
 
     #[test]
     fn single_hash_test() {
-        let hash_a = Blake2sHasher::hash(b"a");
+        let hash_a = Blake2sHasher::hash(b"");
+        println!("hash_a: {}", hash_a.to_string());
         assert_eq!(
             hash_a.to_string(),
             "4a0d129873403037c2cd9b9048203687f6233fb6738956e0349bd4320fec3e90"

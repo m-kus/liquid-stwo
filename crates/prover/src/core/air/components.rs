@@ -125,6 +125,7 @@ impl<B: Backend> ComponentProvers<'_, B> {
         trace: &Trace<'_, B>,
     ) -> SecureCirclePoly<B> {
         let total_constraints: usize = self.components.iter().map(|c| c.n_constraints()).sum();
+        println!("total constraints {}", total_constraints);
         let mut accumulator = DomainEvaluationAccumulator::new(
             random_coeff,
             self.components().composition_log_degree_bound(),

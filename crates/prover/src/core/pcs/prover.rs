@@ -221,6 +221,8 @@ impl<B: BackendForChannel<MC>, MC: MerkleChannel> CommitmentTreeProver<B, MC> {
             MerkleProver::simple_commit(evaluations.iter().map(|eval| &eval.values).collect());
         MC::mix_root(channel, tree.root());
 
+        println!("Evaluation domain log size {}", evaluations.iter().map(|x| x.domain.log_size()).max().unwrap_or(0));
+
         CommitmentTreeProver {
             polynomials,
             evaluations,

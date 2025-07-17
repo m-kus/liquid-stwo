@@ -37,6 +37,7 @@ pub fn prove<B: BackendForChannel<MC>, MC: MerkleChannel>(
         n_preprocessed_columns,
     };
     let trace = commitment_scheme.trace();
+    println!("trace poly evals size {}", trace.evals.iter().map(|x| x.len()).max().unwrap());
 
     // Evaluate and commit on composition polynomial.
     let random_coeff = channel.draw_felt();
@@ -44,6 +45,7 @@ pub fn prove<B: BackendForChannel<MC>, MC: MerkleChannel>(
     let span = span!(Level::INFO, "Composition").entered();
     let span1 = span!(Level::INFO, "Generation").entered();
     let composition_poly = component_provers.compute_composition_polynomial(random_coeff, &trace);
+    println!("CP log size {}", composition_poly.log_size());
     span1.exit();
 
     let mut tree_builder = commitment_scheme.tree_builder();
