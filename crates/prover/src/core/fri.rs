@@ -29,6 +29,7 @@ use crate::core::poly::line::LineDomain;
 use crate::core::utils::bit_reverse_index;
 use crate::core::vcs::ops::{MerkleHasher, MerkleOps};
 use crate::core::vcs::prover::{MerkleDecommitment, MerkleProver};
+use crate::core::vcs::simple::{SimpleMerkleProver, SimpleMerkleVerifier};
 use crate::core::vcs::verifier::{MerkleVerificationError, MerkleVerifier};
 
 /// FRI proof config
@@ -779,7 +780,7 @@ impl<H: MerkleHasher> FriFirstLayerVerifier<H> {
         );
 
         merkle_verifier
-            .verify(
+            .simple_verify(
                 &decommitment_positions_by_log_size,
                 decommitmented_values,
                 self.proof.decommitment.clone(),
@@ -854,7 +855,7 @@ impl<H: MerkleHasher> FriInnerLayerVerifier<H> {
         );
 
         merkle_verifier
-            .verify(
+            .simple_verify(
                 &BTreeMap::from_iter([(self.domain.log_size(), decommitment_positions)]),
                 decommitmented_values,
                 self.proof.decommitment.clone(),
@@ -882,7 +883,7 @@ struct FriFirstLayerProver<'a, B: FriOps + MerkleOps<H>, H: MerkleHasher> {
 impl<'a, B: FriOps + MerkleOps<H>, H: MerkleHasher> FriFirstLayerProver<'a, B, H> {
     fn new(columns: &'a [SecureEvaluation<B, BitReversedOrder>]) -> Self {
         let coordinate_columns = extract_coordinate_columns(columns);
-        let merkle_tree = MerkleProver::commit(coordinate_columns);
+        let merkle_tree = MerkleProver::simple_commit(coordinate_columns);
 
         FriFirstLayerProver {
             columns,
@@ -922,7 +923,7 @@ impl<'a, B: FriOps + MerkleOps<H>, H: MerkleHasher> FriFirstLayerProver<'a, B, H
             fri_witness.extend(column_witness);
         }
 
-        let (_evals, decommitment) = self.merkle_tree.decommit(
+        let (_evals, decommitment) = self.merkle_tree.simple_decommit(
             &decommitment_positions_by_log_size,
             extract_coordinate_columns(self.columns),
         );
@@ -966,7 +967,8 @@ struct FriInnerLayerProver<B: FriOps + MerkleOps<H>, H: MerkleHasher> {
 
 impl<B: FriOps + MerkleOps<H>, H: MerkleHasher> FriInnerLayerProver<B, H> {
     fn new(evaluation: LineEvaluation<B>) -> Self {
-        let merkle_tree = MerkleProver::commit(evaluation.values.columns.iter().collect_vec());
+        let merkle_tree =
+            MerkleProver::simple_commit(evaluation.values.columns.iter().collect_vec());
         FriInnerLayerProver {
             evaluation,
             merkle_tree,
@@ -982,7 +984,7 @@ impl<B: FriOps + MerkleOps<H>, H: MerkleHasher> FriInnerLayerProver<B, H> {
             );
 
         let layer_log_size = self.evaluation.domain().log_size();
-        let (_evals, decommitment) = self.merkle_tree.decommit(
+        let (_evals, decommitment) = self.merkle_tree.simple_decommit(
             &BTreeMap::from_iter([(layer_log_size, decommitment_positions)]),
             self.evaluation.values.columns.iter().collect_vec(),
         );

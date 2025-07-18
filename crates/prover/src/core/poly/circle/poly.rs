@@ -1,7 +1,9 @@
+use num_traits::Zero;
+
 use super::{CircleDomain, CircleEvaluation, PolyOps};
 use crate::core::backend::{Col, Column, ColumnOps};
 use crate::core::circle::CirclePoint;
-use crate::core::fields::m31::BaseField;
+use crate::core::fields::m31::{BaseField, M31};
 use crate::core::fields::qm31::SecureField;
 use crate::core::poly::twiddles::TwiddleTree;
 use crate::core::poly::BitReversedOrder;
@@ -62,6 +64,47 @@ impl<B: PolyOps> CirclePoly<B> {
         twiddles: &TwiddleTree<B>,
     ) -> CircleEvaluation<B, BaseField, BitReversedOrder> {
         B::evaluate(self, domain, twiddles)
+    }
+
+    /// Splits the polynomial into four polynomials over domain of half the length.
+    /// f(x,y) = f_a(X) + y*f_b(X) + x*f_c(X) + x*y*f_d(X), where X = 2x^2-1
+    ///
+    /// The resulting polynomials would look like the following:
+    /// f(x, y) = v0 + 0 * y + v2 * x + 0 * x * y + ... (all coefficients of twiddles containing y
+    /// are zero)
+    pub fn reduce_degree(self) -> [CirclePoly<B>; 4] {
+        let mut coeffs_a = Vec::new();
+        let mut coeffs_b = Vec::new();
+        let mut coeffs_c = Vec::new();
+        let mut coeffs_d = Vec::new();
+
+        // The CFFT basis looks like the following (example for log_size = 3):
+        //
+        //  #0     1
+        //  #1     y
+        //  #2     x
+        //  #3     y * x
+        //  #4     2x^2 - 1
+        //  #5     y * (2x^2 - 1)
+        //  #6     x * (2x^2 - 1)
+        //  #7     y * x * (2x^2 - 1)
+
+        for (i, coeff) in self.coeffs.to_cpu().into_iter().enumerate() {
+            let idx = i % 4;
+            match idx {
+                0 => coeffs_a.extend([coeff, M31::zero()]),
+                1 => coeffs_b.extend([coeff, M31::zero()]),
+                2 => coeffs_c.extend([coeff, M31::zero()]),
+                3 => coeffs_d.extend([coeff, M31::zero()]),
+                _ => unreachable!(),
+            }
+        }
+        [
+            CirclePoly::new(Col::<B, BaseField>::from_iter(coeffs_a)),
+            CirclePoly::new(Col::<B, BaseField>::from_iter(coeffs_b)),
+            CirclePoly::new(Col::<B, BaseField>::from_iter(coeffs_c)),
+            CirclePoly::new(Col::<B, BaseField>::from_iter(coeffs_d)),
+        ]
     }
 }
 

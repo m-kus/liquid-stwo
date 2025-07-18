@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 
+use itertools::any;
+
 use super::ops::{MerkleHasher, MerkleOps};
 use super::prover::{MerkleDecommitment, MerkleProver};
 use super::verifier::{MerkleVerificationError, MerkleVerifier};
@@ -127,6 +129,12 @@ impl<H: MerkleHasher> SimpleMerkleVerifier<H> for MerkleVerifier<H> {
         }
 
         let log_size = *self.column_log_sizes.iter().next().unwrap();
+        if any(self.column_log_sizes.iter(), |log_size| {
+            log_size != log_size
+        }) {
+            return Err(MerkleVerificationError::MixedDegreeUnsupported);
+        }
+
         let queries = queries_per_log_size
             .get(&log_size)
             .expect("No queries for log size");

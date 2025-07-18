@@ -184,4 +184,6 @@ pub enum MerkleVerificationError {
     TooFewQueriedValues,
     #[error("Root mismatch.")]
     RootMismatch,
+    #[error("Mixed degree unsopported in simple mode")]
+    MixedDegreeUnsupported,
 }
