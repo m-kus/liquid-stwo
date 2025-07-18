@@ -1,6 +1,7 @@
+use std::mem;
 use std::ops::Deref;
-use std::{array, mem};
 
+use itertools::any;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{info, instrument, span, Level};
@@ -47,7 +48,13 @@ pub fn prove<B: BackendForChannel<MC>, MC: MerkleChannel>(
     span1.exit();
 
     let mut tree_builder = commitment_scheme.tree_builder();
-    tree_builder.extend_polys(composition_poly.into_coordinate_polys());
+    for poly in composition_poly.into_coordinate_polys() {
+        // Split composition polynomial into four polynomials over domain of half length.
+        // We do this in order to have a single domain for all the polynomials, which would allow to
+        // use simple VCS. NOTE: splitting in halves only works for constraint degree < 4
+        // (log degree bound = 1).
+        tree_builder.extend_polys(poly.reduce_degree().into_iter());
+    }
     tree_builder.commit(channel);
     span.exit();
 
@@ -58,7 +65,7 @@ pub fn prove<B: BackendForChannel<MC>, MC: MerkleChannel>(
     let mut sample_points = component_provers.components().mask_points(oods_point);
 
     // Add the composition polynomial mask points.
-    sample_points.push(vec![vec![oods_point]; SECURE_EXTENSION_DEGREE]);
+    sample_points.push(vec![vec![oods_point.double()]; SECURE_EXTENSION_DEGREE * 4]);
 
     // Prove the trace and composition OODS values, and retrieve them.
     let commitment_scheme_proof = commitment_scheme.prove_values(sample_points, channel);
@@ -67,7 +74,7 @@ pub fn prove<B: BackendForChannel<MC>, MC: MerkleChannel>(
 
     // Evaluate composition polynomial at OODS point and check that it matches the trace OODS
     // values. This is a sanity check.
-    if proof.extract_composition_oods_eval().unwrap()
+    if proof.extract_composition_oods_eval(oods_point).unwrap()
         != component_provers
             .components()
             .eval_composition_polynomial_at_point(oods_point, &proof.sampled_values, random_coeff)
@@ -97,7 +104,7 @@ pub fn verify<MC: MerkleChannel>(
     // Read composition polynomial commitment.
     commitment_scheme.commit(
         *proof.commitments.last().unwrap(),
-        &[components.composition_log_degree_bound(); SECURE_EXTENSION_DEGREE],
+        &[components.composition_log_degree_bound() - 1; SECURE_EXTENSION_DEGREE * 4],
         channel,
     );
 
@@ -106,12 +113,15 @@ pub fn verify<MC: MerkleChannel>(
 
     // Get mask sample points relative to oods point.
     let mut sample_points = components.mask_points(oods_point);
-    // Add the composition polynomial mask points.
-    sample_points.push(vec![vec![oods_point]; SECURE_EXTENSION_DEGREE]);
 
-    let composition_oods_eval = proof.extract_composition_oods_eval().map_err(|_| {
-        VerificationError::InvalidStructure("Unexpected sampled_values structure".to_string())
-    })?;
+    // Add the composition polynomial mask points.
+    sample_points.push(vec![vec![oods_point.double()]; SECURE_EXTENSION_DEGREE * 4]);
+
+    let composition_oods_eval = proof
+        .extract_composition_oods_eval(oods_point)
+        .map_err(|_| {
+            VerificationError::InvalidStructure("Unexpected sampled_values structure".to_string())
+        })?;
 
     if composition_oods_eval
         != components.eval_composition_polynomial_at_point(
@@ -158,26 +168,50 @@ pub struct StarkProof<H: MerkleHasher>(pub CommitmentSchemeProof<H>);
 
 impl<H: MerkleHasher> StarkProof<H> {
     /// Extracts the composition trace Out-Of-Domain-Sample evaluation from the mask.
-    fn extract_composition_oods_eval(&self) -> Result<SecureField, InvalidOodsSampleStructure> {
+    fn extract_composition_oods_eval(
+        &self,
+        oods_point: CirclePoint<SecureField>,
+    ) -> Result<SecureField, InvalidOodsSampleStructure> {
         // TODO(andrew): `[.., composition_mask, _quotients_mask]` when add quotients commitment.
         let [.., composition_mask] = &**self.sampled_values else {
             return Err(InvalidOodsSampleStructure);
         };
 
-        let mut composition_cols = composition_mask.iter();
+        let mut evals_a = Vec::with_capacity(SECURE_EXTENSION_DEGREE);
+        let mut evals_b = Vec::with_capacity(SECURE_EXTENSION_DEGREE);
+        let mut evals_c = Vec::with_capacity(SECURE_EXTENSION_DEGREE);
+        let mut evals_d = Vec::with_capacity(SECURE_EXTENSION_DEGREE);
 
-        let coordinate_evals = array::try_from_fn(|_| {
-            let col = &**composition_cols.next().ok_or(InvalidOodsSampleStructure)?;
-            let [eval] = col.try_into().map_err(|_| InvalidOodsSampleStructure)?;
-            Ok(eval)
-        })?;
+        for (i, col) in composition_mask.iter().enumerate() {
+            let [eval] = col
+                .as_slice()
+                .try_into()
+                .map_err(|_| InvalidOodsSampleStructure)?;
+            match i % 4 {
+                0 => evals_a.push(eval),
+                1 => evals_b.push(eval),
+                2 => evals_c.push(eval),
+                3 => evals_d.push(eval),
+                _ => unreachable!(),
+            }
+        }
 
-        // Too many columns.
-        if composition_cols.next().is_some() {
+        if any([&evals_a, &evals_b, &evals_c, &evals_d], |evals| {
+            evals.len() != SECURE_EXTENSION_DEGREE
+        }) {
             return Err(InvalidOodsSampleStructure);
         }
 
-        Ok(SecureField::from_partial_evals(coordinate_evals))
+        let eval_a = SecureField::from_partial_evals(evals_a.try_into().unwrap());
+        let eval_b = SecureField::from_partial_evals(evals_b.try_into().unwrap());
+        let eval_c = SecureField::from_partial_evals(evals_c.try_into().unwrap());
+        let eval_d = SecureField::from_partial_evals(evals_d.try_into().unwrap());
+
+        // F(x, y) = F_a(X, Y) + x * F_b(X, Y) + y * F_c(X, Y) + x * y * F_d(X, Y)
+        Ok(eval_a
+            + eval_b * oods_point.y
+            + eval_c * oods_point.x
+            + eval_d * oods_point.x * oods_point.y)
     }
 
     /// Returns the estimate size (in bytes) of the proof.
