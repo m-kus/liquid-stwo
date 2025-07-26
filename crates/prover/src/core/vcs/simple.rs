@@ -89,14 +89,14 @@ impl<B: MerkleOps<H>, H: MerkleHasher> SimpleMerkleProver<B, H> for MerkleProver
                 let node_values = columns.iter().map(|c| c.at(*query));
                 queried_values.extend(node_values);
 
-                let mut prev_node_index = *query;
                 let mut node_index = *query / 2;
+                let mut auth_path = *query + (1 << log_size);
 
                 for layer_log_size in (0..self.layers.len() as u32).rev() {
                     let previous_layer_hashes = self.layers.get(layer_log_size as usize + 1);
 
                     if let Some(previous_layer_hashes) = previous_layer_hashes {
-                        if prev_node_index % 2 == 0 {
+                        if auth_path % 2 == 0 {
                             decommitment
                                 .hash_witness
                                 .push(previous_layer_hashes.at(2 * node_index + 1));
@@ -106,8 +106,8 @@ impl<B: MerkleOps<H>, H: MerkleHasher> SimpleMerkleProver<B, H> for MerkleProver
                                 .push(previous_layer_hashes.at(2 * node_index));
                         }
 
-                        prev_node_index = node_index;
                         node_index /= 2;
+                        auth_path /= 2;
                     }
                 }
             }
@@ -155,18 +155,18 @@ impl<H: MerkleHasher> SimpleMerkleVerifier<H> for MerkleVerifier<H> {
                 .next()
                 .ok_or(MerkleVerificationError::TooFewQueriedValues)?;
             let mut node = H::hash_node(None, &node_values);
-            let mut node_index = *query;
+            let mut auth_path = *query + (1 << log_size);
 
             for _ in 0..log_size {
                 let sibling_node = *sibling_hashes
                     .next()
                     .ok_or(MerkleVerificationError::WitnessTooShort)?;
-                if node_index % 2 == 0 {
+                if auth_path % 2 == 0 {
                     node = H::hash_node(Some((node, sibling_node)), &[]);
                 } else {
                     node = H::hash_node(Some((sibling_node, node)), &[]);
                 }
-                node_index /= 2;
+                auth_path /= 2;
             }
 
             if node != self.root {

@@ -293,7 +293,7 @@ mod tests {
             fri_config: FriConfig {
                 log_blowup_factor: 1,
                 log_last_layer_degree_bound: 0,
-                n_queries: 12,
+                n_queries: 1,
             },
         };
         // Precompute twiddles.

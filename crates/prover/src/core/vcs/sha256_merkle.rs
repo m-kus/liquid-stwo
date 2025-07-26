@@ -23,7 +23,7 @@ impl MerkleHasher for Sha256MerkleHasher {
         }
 
         for value in column_values {
-            hasher.update(value.0.to_le_bytes());
+            hasher.update(value.0.to_be_bytes());
         }
 
         Sha256Hash(hasher.finalize().into())
