@@ -19,17 +19,17 @@ pub struct Queries {
 impl Queries {
     /// Randomizes a set of query indices uniformly over the range [0, 2^`log_query_size`).
     pub fn generate(channel: &mut impl Channel, log_domain_size: u32, n_queries: usize) -> Self {
+        assert!(n_queries <= (1 << log_domain_size));
         let mut queries = BTreeSet::new();
-        let mut query_cnt = 0;
         let max_query = (1 << log_domain_size) - 1;
         loop {
             let random_bytes = channel.draw_random_bytes();
             for chunk in random_bytes.chunks_exact(UPPER_BOUND_QUERY_BYTES) {
                 let query_bits = u32::from_le_bytes(chunk.try_into().unwrap());
                 let quotient_query = query_bits & max_query;
+                // NOTE that there is a small probability that the same query is sampled twice.
                 queries.insert(quotient_query as usize);
-                query_cnt += 1;
-                if query_cnt == n_queries {
+                if queries.len() == n_queries {
                     return Self {
                         positions: queries.into_iter().collect(),
                         log_domain_size,
@@ -88,6 +88,16 @@ mod tests {
         assert!(queries.len() == n_queries);
         assert!(queries.iter().is_sorted());
         assert!(*queries.positions.last().unwrap() < 1 << log_query_size);
+    }
+
+    #[test]
+    fn test_generate_queries_with_duplicates() {
+        let channel = &mut Blake2sChannel::default();
+        let log_query_size = 3;
+        let n_queries = 8;
+
+        let queries = Queries::generate(channel, log_query_size, n_queries);
+        assert!(queries.len() == n_queries);
     }
 
     #[test]
