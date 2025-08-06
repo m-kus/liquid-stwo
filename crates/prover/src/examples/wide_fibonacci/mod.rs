@@ -286,14 +286,14 @@ mod tests {
 
     #[test_log::test]
     fn test_wide_fib_prove_with_sha256() {
-        let log_n_instances = 2;
+        let log_n_instances = 10;
 
         let config = PcsConfig {
             pow_bits: 5,
             fri_config: FriConfig {
                 log_blowup_factor: 1,
                 log_last_layer_degree_bound: 0,
-                n_queries: 1,
+                n_queries: 30,
             },
         };
         // Precompute twiddles.
