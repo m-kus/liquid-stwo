@@ -241,6 +241,6 @@ impl<B: BackendForChannel<MC>, MC: MerkleChannel> CommitmentTreeProver<B, MC> {
             .iter()
             .map(|eval| &eval.values)
             .collect_vec();
-        self.commitment.simple_decommit(queries, eval_vec)
+        self.commitment.simple_decommit(queries, eval_vec, false)
     }
 }

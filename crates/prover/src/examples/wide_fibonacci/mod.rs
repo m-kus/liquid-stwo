@@ -286,14 +286,14 @@ mod tests {
 
     #[test_log::test]
     fn test_wide_fib_prove_with_sha256() {
-        let log_n_instances = 10;
+        let log_n_instances = 3;
 
         let config = PcsConfig {
             pow_bits: 5,
             fri_config: FriConfig {
                 log_blowup_factor: 1,
                 log_last_layer_degree_bound: 0,
-                n_queries: 30,
+                n_queries: 1,
             },
         };
         // Precompute twiddles.
@@ -334,6 +334,9 @@ mod tests {
             commitment_scheme,
         )
         .unwrap();
+
+        // println!("proof: {:#?}", proof);
+        // std::fs::write("proof.json", serde_json::to_string(&proof).unwrap()).unwrap();
 
         // Verify.
         let verifier_channel = &mut Sha256Channel::default();

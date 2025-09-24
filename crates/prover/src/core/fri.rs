@@ -784,6 +784,7 @@ impl<H: MerkleHasher> FriFirstLayerVerifier<H> {
                 &decommitment_positions_by_log_size,
                 decommitmented_values,
                 self.proof.decommitment.clone(),
+                true,
             )
             .map_err(|error| FriVerificationError::FirstLayerCommitmentInvalid { error })?;
 
@@ -859,6 +860,7 @@ impl<H: MerkleHasher> FriInnerLayerVerifier<H> {
                 &BTreeMap::from_iter([(self.domain.log_size(), decommitment_positions)]),
                 decommitmented_values,
                 self.proof.decommitment.clone(),
+                true,
             )
             .map_err(|e| FriVerificationError::InnerLayerCommitmentInvalid {
                 inner_layer: self.layer_index,
@@ -923,9 +925,10 @@ impl<'a, B: FriOps + MerkleOps<H>, H: MerkleHasher> FriFirstLayerProver<'a, B, H
             fri_witness.extend(column_witness);
         }
 
-        let (_evals, decommitment) = self.merkle_tree.simple_decommit(
+        let (_, decommitment) = self.merkle_tree.simple_decommit(
             &decommitment_positions_by_log_size,
             extract_coordinate_columns(self.columns),
+            true,
         );
 
         let commitment = self.merkle_tree.root();
@@ -987,6 +990,7 @@ impl<B: FriOps + MerkleOps<H>, H: MerkleHasher> FriInnerLayerProver<B, H> {
         let (_evals, decommitment) = self.merkle_tree.simple_decommit(
             &BTreeMap::from_iter([(layer_log_size, decommitment_positions)]),
             self.evaluation.values.columns.iter().collect_vec(),
+            true,
         );
 
         let commitment = self.merkle_tree.root();

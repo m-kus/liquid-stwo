@@ -93,7 +93,12 @@ impl<MC: MerkleChannel> CommitmentSchemeVerifier<MC> {
             .zip_eq(proof.decommitments)
             .zip_eq(proof.queried_values.clone())
             .map(|((tree, decommitment), queried_values)| {
-                tree.simple_verify(&query_positions_per_log_size, queried_values, decommitment)
+                tree.simple_verify(
+                    &query_positions_per_log_size,
+                    queried_values,
+                    decommitment,
+                    false,
+                )
             })
             .0
             .into_iter()

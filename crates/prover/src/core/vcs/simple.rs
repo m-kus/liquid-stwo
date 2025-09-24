@@ -27,6 +27,7 @@ pub trait SimpleMerkleProver<B: MerkleOps<H>, H: MerkleHasher> {
         &self,
         queries_per_log_size: &BTreeMap<u32, Vec<usize>>,
         columns: Vec<&Col<B, BaseField>>,
+        adjacent_leaves: bool,
     ) -> (Vec<BaseField>, MerkleDecommitment<H>);
 }
 
@@ -37,6 +38,7 @@ pub trait SimpleMerkleVerifier<H: MerkleHasher> {
         queries_per_log_size: &BTreeMap<u32, Vec<usize>>,
         queried_values: Vec<BaseField>,
         decommitment: MerkleDecommitment<H>,
+        adjacent_leaves: bool,
     ) -> Result<(), MerkleVerificationError>;
 }
 
@@ -70,6 +72,7 @@ impl<B: MerkleOps<H>, H: MerkleHasher> SimpleMerkleProver<B, H> for MerkleProver
         &self,
         queries_per_log_size: &BTreeMap<u32, Vec<usize>>,
         columns: Vec<&Col<B, BaseField>>,
+        adjacent_leaves: bool,
     ) -> (Vec<BaseField>, MerkleDecommitment<H>) {
         let mut queried_values = vec![];
         let mut decommitment = MerkleDecommitment::empty();
@@ -85,30 +88,52 @@ impl<B: MerkleOps<H>, H: MerkleHasher> SimpleMerkleProver<B, H> for MerkleProver
                 .get(&log_size)
                 .expect("No queries for log size");
 
+            let queries = if adjacent_leaves {
+                queries
+                    .chunks_exact(2)
+                    .map(|chunk| {
+                        assert!(chunk[0] + 1 == chunk[1]);
+                        chunk[0]
+                    })
+                    .collect()
+            } else {
+                queries.clone()
+            };
+
             for query in queries {
-                let node_values = columns.iter().map(|c| c.at(*query));
-                queried_values.extend(node_values);
+                if !adjacent_leaves {
+                    let node_values = columns.iter().map(|c| c.at(query));
+                    queried_values.extend(node_values);
+                }
 
-                let mut node_index = *query / 2;
-                let mut auth_path = *query + (1 << log_size);
+                let mut node_index = query / 2;
+                let mut auth_path = query + (1 << log_size);
+                let mut next_log_size = log_size;
 
-                for layer_log_size in (0..self.layers.len() as u32).rev() {
-                    let previous_layer_hashes = self.layers.get(layer_log_size as usize + 1);
+                if adjacent_leaves {
+                    node_index /= 2;
+                    auth_path /= 2;
+                    next_log_size -= 1;
+                }
 
-                    if let Some(previous_layer_hashes) = previous_layer_hashes {
-                        if auth_path % 2 == 0 {
-                            decommitment
-                                .hash_witness
-                                .push(previous_layer_hashes.at(2 * node_index + 1));
-                        } else {
-                            decommitment
-                                .hash_witness
-                                .push(previous_layer_hashes.at(2 * node_index));
-                        }
+                for layer_log_size in (0..next_log_size).rev() {
+                    let previous_layer_hashes = self
+                        .layers
+                        .get(layer_log_size as usize + 1)
+                        .expect("No previous layer hashes");
 
-                        node_index /= 2;
-                        auth_path /= 2;
+                    if auth_path % 2 == 0 {
+                        decommitment
+                            .hash_witness
+                            .push(previous_layer_hashes.at(2 * node_index + 1));
+                    } else {
+                        decommitment
+                            .hash_witness
+                            .push(previous_layer_hashes.at(2 * node_index));
                     }
+
+                    node_index /= 2;
+                    auth_path /= 2;
                 }
             }
         }
@@ -123,6 +148,7 @@ impl<H: MerkleHasher> SimpleMerkleVerifier<H> for MerkleVerifier<H> {
         queries_per_log_size: &BTreeMap<u32, Vec<usize>>,
         queried_values: Vec<BaseField>,
         decommitment: MerkleDecommitment<H>,
+        adjacent_leaves: bool,
     ) -> Result<(), MerkleVerificationError> {
         if self.column_log_sizes.is_empty() {
             return Ok(());
@@ -150,14 +176,32 @@ impl<H: MerkleHasher> SimpleMerkleVerifier<H> for MerkleVerifier<H> {
 
         let mut queried_values_iter = queried_values.chunks(*n_columns);
 
+        let queries = if adjacent_leaves {
+            queries.chunks_exact(2).map(|chunk| chunk[0]).collect()
+        } else {
+            queries.clone()
+        };
+
         for query in queries {
             let node_values = queried_values_iter
                 .next()
                 .ok_or(MerkleVerificationError::TooFewQueriedValues)?;
             let mut node = H::hash_node(None, &node_values);
-            let mut auth_path = *query + (1 << log_size);
+            let mut auth_path = query + (1 << log_size);
+            let mut next_log_size = log_size;
 
-            for _ in 0..log_size {
+            if adjacent_leaves {
+                assert!(auth_path % 2 == 0);
+                let column_witness = queried_values_iter
+                    .next()
+                    .ok_or(MerkleVerificationError::WitnessTooShort)?;
+                let sibling_node = H::hash_node(None, &column_witness);
+                node = H::hash_node(Some((node, sibling_node)), &[]);
+                auth_path /= 2;
+                next_log_size -= 1;
+            }
+
+            for _ in 0..next_log_size {
                 let sibling_node = *sibling_hashes
                     .next()
                     .ok_or(MerkleVerificationError::WitnessTooShort)?;
@@ -167,6 +211,10 @@ impl<H: MerkleHasher> SimpleMerkleVerifier<H> for MerkleVerifier<H> {
                     node = H::hash_node(Some((sibling_node, node)), &[]);
                 }
                 auth_path /= 2;
+            }
+
+            if auth_path != 1 {
+                return Err(MerkleVerificationError::WitnessTooLong);
             }
 
             if node != self.root {
